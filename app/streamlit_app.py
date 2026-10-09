@@ -50,13 +50,19 @@ def predict_single(payload):
     if churn_model_obj and ltv_model_obj:
         df = pd.DataFrame([payload])
         
-        # Calculate churn probability
+        # 1. Calculate churn probability
         if hasattr(churn_model_obj, "predict_proba"):
             churn_prob = float(churn_model_obj.predict_proba(df)[0][1])
         else:
             churn_prob = float(churn_model_obj.predict(df)[0])
             
         churn_pred = 1 if churn_prob >= 0.5 else 0
+
+        # 2. Add 'Churn' column to df for LTV model if missing
+        if "Churn" not in df.columns:
+            df["Churn"] = churn_pred
+            
+        # 3. Predict LTV
         predicted_ltv = float(ltv_model_obj.predict(df)[0])
         
         risk_level = "High Risk" if churn_prob >= 0.6 else ("Medium Risk" if churn_prob >= 0.3 else "Low Risk")
