@@ -281,41 +281,61 @@ with main_tab1:
                 unsafe_allow_html=True,
             )
 
-            v1, v2 = st.columns([1.2, 1])
+            st.markdown("### 📈 Visual Intelligence")
+            v1, v2, v3 = st.columns([1.2, 1, 1.2])
+            
+            # 1. Churn Risk Gauge (Larger Size)
             with v1:
-                fig = go.Figure(
+                fig_gauge = go.Figure(
                     go.Indicator(
                         mode="gauge+number",
                         value=churn_prob,
-                        title={"text": "Churn Risk Gauge (%)"},
+                        title={"text": "Churn Risk Gauge (%)", "font": {"size": 18}},
+                        number={"suffix": "%", "font": {"size": 36}},
                         gauge={
                             "axis": {"range": [0, 100]},
                             "bar": {"color": "#6366f1"},
                             "steps": [
-                                {
-                                    "range": [0, 30],
-                                    "color": "rgba(0,200,83,0.3)",
-                                },
-                                {
-                                    "range": [30, 60],
-                                    "color": "rgba(255,171,0,0.3)",
-                                },
-                                {
-                                    "range": [60, 100],
-                                    "color": "rgba(255,75,75,0.3)",
-                                },
+                                {"range": [0, 30], "color": "rgba(0,200,83,0.3)"},
+                                {"range": [30, 60], "color": "rgba(255,171,0,0.3)"},
+                                {"range": [60, 100], "color": "rgba(255,75,75,0.3)"},
                             ],
                         },
                     )
                 )
-                fig.update_layout(
+                fig_gauge.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)",
-                    font={"color": "gray"},
-                    height=260,
+                    font={"color": "white"},
+                    height=350,
+                    margin=dict(l=20, r=20, t=50, b=20),
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig_gauge, use_container_width=True)
 
+            # 2. LTV Comparison Chart (Second Chart)
             with v2:
+                avg_ltv = 2280.0  # Average Telco Customer LTV
+                fig_ltv = go.Figure(
+                    go.Bar(
+                        x=["Customer LTV", "Avg Telco LTV"],
+                        y=[ltv, avg_ltv],
+                        marker_color=["#6366f1", "#3b82f6"],
+                        text=[f"${ltv:,.0f}", f"${avg_ltv:,.0f}"],
+                        textposition="auto",
+                    )
+                )
+                fig_ltv.update_layout(
+                    title={"text": "Predicted LTV vs Benchmark", "font": {"size": 16}},
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font={"color": "white"},
+                    height=350,
+                    yaxis=dict(title="LTV ($)", gridcolor="#2e364f"),
+                    margin=dict(l=20, r=20, t=50, b=20),
+                )
+                st.plotly_chart(fig_ltv, use_container_width=True)
+
+            # 3. Action Plan Box
+            with v3:
                 st.markdown("### 💡 Recommended Action Plan")
                 if risk_level == "High Risk":
                     st.markdown(
