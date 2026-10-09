@@ -80,6 +80,7 @@ def predict_single(payload):
 st.markdown(
     """
     <style>
+    /* Metric Cards Styling */
     .metric-card {
         background: #1e222d;
         border: 1px solid #2e364f;
@@ -101,6 +102,7 @@ st.markdown(
         font-weight: 700;
     }
     
+    /* Risk Alert Boxes */
     .high-risk-box {
         background-color: rgba(255, 75, 75, 0.15);
         border-left: 5px solid #ff4b4b;
@@ -124,6 +126,12 @@ st.markdown(
         border-radius: 8px;
         color: #00c853;
         font-weight: 600;
+    }
+
+    /* Increase Tab Font Size */
+    button[data-baseweb="tab"] p {
+        font-size: 18px !important;
+        font-weight: 600 !important;
     }
     </style>
 """,
