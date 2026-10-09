@@ -34,6 +34,12 @@ churn_model_obj, ltv_model_obj = load_local_models()
 
 # Unified Prediction Handler (Tries Backend API first, falls back to Direct Model Inference)
 def predict_single(payload):
+    # Ensure TotalCharges exists in payload
+    if "TotalCharges" not in payload or payload["TotalCharges"] is None:
+        tenure_val = payload.get("tenure", 0)
+        monthly_val = payload.get("MonthlyCharges", 0.0)
+        payload["TotalCharges"] = round(float(tenure_val) * float(monthly_val), 2)
+
     try:
         res = requests.post("http://127.0.0.1:8000/predict", json=payload, timeout=2)
         if res.status_code == 200:
@@ -225,6 +231,7 @@ with main_tab1:
         use_container_width=True,
         type="primary",
     ):
+        total_charges = round(float(tenure) * float(monthly_charges), 2)
         payload = {
             "gender": gender,
             "SeniorCitizen": senior_citizen,
@@ -244,6 +251,7 @@ with main_tab1:
             "PaperlessBilling": paperless_billing,
             "PaymentMethod": payment_method,
             "MonthlyCharges": monthly_charges,
+            "TotalCharges": total_charges,
         }
 
         try:
