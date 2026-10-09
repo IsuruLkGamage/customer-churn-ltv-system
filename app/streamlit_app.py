@@ -2,6 +2,7 @@ import io
 import os
 import sys
 
+import joblib
 import pandas as pd
 import plotly.graph_objects as go
 import requests
@@ -18,11 +19,55 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom Styling (Theme-Adaptive & High Contrast Fix)
+# Helper function to load local models for Direct Inference (Fallback for Cloud)
+@st.cache_resource
+def load_local_models():
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    churn_path = os.path.join(base_dir, "models", "churn_model.joblib")
+    ltv_path = os.path.join(base_dir, "models", "ltv_model.joblib")
+    
+    churn_model = joblib.load(churn_path) if os.path.exists(churn_path) else None
+    ltv_model = joblib.load(ltv_path) if os.path.exists(ltv_path) else None
+    return churn_model, ltv_model
+
+churn_model_obj, ltv_model_obj = load_local_models()
+
+# Unified Prediction Handler (Tries Backend API first, falls back to Direct Model Inference)
+def predict_single(payload):
+    try:
+        res = requests.post("http://127.0.0.1:8000/predict", json=payload, timeout=2)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass  # Fallback to direct local inference if API is unreachable
+
+    if churn_model_obj and ltv_model_obj:
+        df = pd.DataFrame([payload])
+        
+        # Calculate churn probability
+        if hasattr(churn_model_obj, "predict_proba"):
+            churn_prob = float(churn_model_obj.predict_proba(df)[0][1])
+        else:
+            churn_prob = float(churn_model_obj.predict(df)[0])
+            
+        churn_pred = 1 if churn_prob >= 0.5 else 0
+        predicted_ltv = float(ltv_model_obj.predict(df)[0])
+        
+        risk_level = "High Risk" if churn_prob >= 0.6 else ("Medium Risk" if churn_prob >= 0.3 else "Low Risk")
+        
+        return {
+            "churn_prediction": churn_pred,
+            "churn_probability": round(churn_prob, 4),
+            "risk_level": risk_level,
+            "predicted_ltv": round(predicted_ltv, 2)
+        }
+    else:
+        raise RuntimeError("FastAPI Backend is unreachable and local models could not be loaded.")
+
+# Custom Styling
 st.markdown(
     """
     <style>
-    /* Custom Card Containers */
     .metric-card {
         background: #1e222d;
         border: 1px solid #2e364f;
@@ -44,7 +89,6 @@ st.markdown(
         font-weight: 700;
     }
     
-    /* Risk Banners */
     .high-risk-box {
         background-color: rgba(255, 75, 75, 0.15);
         border-left: 5px solid #ff4b4b;
@@ -82,7 +126,7 @@ with st.sidebar:
     st.title("Telco Analytics AI")
     st.caption("Enterprise Retention & LTV Suite")
     st.divider()
-    st.info("💡 **Backend Service:** Active on `http://127.0.0.1:8000`")
+    st.success("🟢 **System Mode:** Cloud Hybrid Ready")
 
 # Header Section
 st.title("🔮 Enterprise Customer Retention & LTV Suite")
@@ -203,93 +247,85 @@ with main_tab1:
         }
 
         try:
-            res = requests.post("http://127.0.0.1:8000/predict", json=payload)
-            if res.status_code == 200:
-                data = res.json()
-                churn_prob = data["churn_probability"] * 100
-                risk_level = data["risk_level"]
-                ltv = data["predicted_ltv"]
+            data = predict_single(payload)
+            churn_prob = data["churn_probability"] * 100
+            risk_level = data["risk_level"]
+            ltv = data["predicted_ltv"]
 
-                st.divider()
-                m1, m2, m3 = st.columns(3)
-                m1.markdown(
-                    f'<div class="metric-card"><div'
-                    ' class="metric-title">Risk'
-                    f' Level</div><div class="metric-value">{risk_level}</div></div>',
-                    unsafe_allow_html=True,
-                )
-                m2.markdown(
-                    f'<div class="metric-card"><div'
-                    ' class="metric-title">Churn Probability</div><div'
-                    f' class="metric-value">{churn_prob:.1f}%</div></div>',
-                    unsafe_allow_html=True,
-                )
-                m3.markdown(
-                    f'<div class="metric-card"><div'
-                    ' class="metric-title">Predicted LTV</div><div'
-                    f' class="metric-value">${ltv:,.2f}</div></div>',
-                    unsafe_allow_html=True,
-                )
+            st.divider()
+            m1, m2, m3 = st.columns(3)
+            m1.markdown(
+                f'<div class="metric-card"><div class="metric-title">Risk Level</div><div class="metric-value">{risk_level}</div></div>',
+                unsafe_allow_html=True,
+            )
+            m2.markdown(
+                f'<div class="metric-card"><div class="metric-title">Churn Probability</div><div class="metric-value">{churn_prob:.1f}%</div></div>',
+                unsafe_allow_html=True,
+            )
+            m3.markdown(
+                f'<div class="metric-card"><div class="metric-title">Predicted LTV</div><div class="metric-value">${ltv:,.2f}</div></div>',
+                unsafe_allow_html=True,
+            )
 
-                v1, v2 = st.columns([1.2, 1])
-                with v1:
-                    fig = go.Figure(
-                        go.Indicator(
-                            mode="gauge+number",
-                            value=churn_prob,
-                            title={"text": "Churn Risk Gauge (%)"},
-                            gauge={
-                                "axis": {"range": [0, 100]},
-                                "bar": {"color": "#6366f1"},
-                                "steps": [
-                                    {
-                                        "range": [0, 30],
-                                        "color": "rgba(0,200,83,0.3)",
-                                    },
-                                    {
-                                        "range": [30, 60],
-                                        "color": "rgba(255,171,0,0.3)",
-                                    },
-                                    {
-                                        "range": [60, 100],
-                                        "color": "rgba(255,75,75,0.3)",
-                                    },
-                                ],
-                            },
-                        )
+            v1, v2 = st.columns([1.2, 1])
+            with v1:
+                fig = go.Figure(
+                    go.Indicator(
+                        mode="gauge+number",
+                        value=churn_prob,
+                        title={"text": "Churn Risk Gauge (%)"},
+                        gauge={
+                            "axis": {"range": [0, 100]},
+                            "bar": {"color": "#6366f1"},
+                            "steps": [
+                                {
+                                    "range": [0, 30],
+                                    "color": "rgba(0,200,83,0.3)",
+                                },
+                                {
+                                    "range": [30, 60],
+                                    "color": "rgba(255,171,0,0.3)",
+                                },
+                                {
+                                    "range": [60, 100],
+                                    "color": "rgba(255,75,75,0.3)",
+                                },
+                            ],
+                        },
                     )
-                    fig.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        font={"color": "gray"},
-                        height=260,
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                )
+                fig.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font={"color": "gray"},
+                    height=260,
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
-                with v2:
-                    st.markdown("### 💡 Recommended Action Plan")
-                    if risk_level == "High Risk":
-                        st.markdown(
-                            '<div class="high-risk-box">⚠️ HIGH RISK: Offer'
-                            " long-term contract renewal discount and free tech"
-                            " support package immediately.</div>",
-                            unsafe_allow_html=True,
-                        )
-                    elif risk_level == "Medium Risk":
-                        st.markdown(
-                            '<div class="med-risk-box">⚡ MODERATE RISK: Send'
-                            " promotional bundle deals and service check-in"
-                            " notification.</div>",
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        st.markdown(
-                            '<div class="low-risk-box">✅ LOW RISK: Highly'
-                            " engaged customer. Target for upselling fiber"
-                            " internet upgrades.</div>",
-                            unsafe_allow_html=True,
-                        )
+            with v2:
+                st.markdown("### 💡 Recommended Action Plan")
+                if risk_level == "High Risk":
+                    st.markdown(
+                        '<div class="high-risk-box">⚠️ HIGH RISK: Offer'
+                        " long-term contract renewal discount and free tech"
+                        " support package immediately.</div>",
+                        unsafe_allow_html=True,
+                    )
+                elif risk_level == "Medium Risk":
+                    st.markdown(
+                        '<div class="med-risk-box">⚡ MODERATE RISK: Send'
+                        " promotional bundle deals and service check-in"
+                        " notification.</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        '<div class="low-risk-box">✅ LOW RISK: Highly'
+                        " engaged customer. Target for upselling fiber"
+                        " internet upgrades.</div>",
+                        unsafe_allow_html=True,
+                    )
         except Exception as e:
-            st.error(f"Error connecting to backend: {e}")
+            st.error(f"Error executing inference: {e}")
 
 # -------------------------------------------------------------
 # TAB 2: Batch CSV Processing
@@ -314,17 +350,13 @@ with main_tab2:
             for idx, row in batch_df.iterrows():
                 payload = row.to_dict()
                 try:
-                    res = requests.post(
-                        "http://127.0.0.1:8000/predict", json=payload
+                    out = predict_single(payload)
+                    payload["Churn_Prediction"] = out["churn_prediction"]
+                    payload["Churn_Probability_%"] = round(
+                        out["churn_probability"] * 100, 2
                     )
-                    if res.status_code == 200:
-                        out = res.json()
-                        payload["Churn_Prediction"] = out["churn_prediction"]
-                        payload["Churn_Probability_%"] = round(
-                            out["churn_probability"] * 100, 2
-                        )
-                        payload["Risk_Level"] = out["risk_level"]
-                        payload["Predicted_LTV_$"] = out["predicted_ltv"]
+                    payload["Risk_Level"] = out["risk_level"]
+                    payload["Predicted_LTV_$"] = out["predicted_ltv"]
                     results.append(payload)
                 except Exception:
                     pass
