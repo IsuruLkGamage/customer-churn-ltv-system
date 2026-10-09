@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  churn-ltv-system:
+    build: .
+    container_name: churn_ltv_container
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    restart: always
