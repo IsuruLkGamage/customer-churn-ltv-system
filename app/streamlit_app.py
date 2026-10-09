@@ -23,8 +23,8 @@ st.set_page_config(
 @st.cache_resource
 def load_local_models():
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    churn_path = os.path.join(base_dir, "models", "churn_model.joblib")
-    ltv_path = os.path.join(base_dir, "models", "ltv_model.joblib")
+    churn_path = os.path.join(base_dir, "models", "churn_pipeline.joblib")
+    ltv_path = os.path.join(base_dir, "models", "ltv_pipeline.joblib")
     
     churn_model = joblib.load(churn_path) if os.path.exists(churn_path) else None
     ltv_model = joblib.load(ltv_path) if os.path.exists(ltv_path) else None
